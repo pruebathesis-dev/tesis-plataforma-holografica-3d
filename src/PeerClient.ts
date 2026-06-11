@@ -5,10 +5,14 @@ export class PeerClient {
   id: string | null = null;
   conn?: DataConnection;
   call?: MediaConnection;
+  private pendingCall?: MediaConnection;
 
   onOpen?: (id: string) => void;
   onRemoteStream?: (s: MediaStream) => void;
   onFaceData?: (data: any) => void;
+  onIncomingCall?: (call: MediaConnection) => void;
+  onDataConnected?: () => void;
+  onDisconnected?: () => void;
 
   constructor() {
     this.peer = new Peer(undefined as unknown as string, {
@@ -24,43 +28,76 @@ export class PeerClient {
     });
 
     this.peer.on('call', (call) => {
-      // ✅ Solo audio (video is for local FaceMesh, not for WebRTC)
-      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-        call.answer(stream);
-        call.on('stream', (s: MediaStream) => this.onRemoteStream?.(s));
-      });
+      this.pendingCall = call;
+      this.onIncomingCall?.(call);
     });
 
     this.peer.on('connection', (conn) => {
-      this.conn = conn;
-      conn.on('data', (d: any) => this.onFaceData?.(d));
+      this.wireDataConnection(conn);
     });
   }
 
   connect(remoteId: string) {
-    this.conn = this.peer.connect(remoteId);
-    this.conn.on('data', (d: any) => this.onFaceData?.(d));
+    const conn = this.peer.connect(remoteId);
+    this.wireDataConnection(conn);
+  }
+
+  private wireDataConnection(conn: DataConnection): void {
+    this.conn = conn;
+
+    conn.on('open', () => {
+      console.log('📡 Data channel open');
+      this.onDataConnected?.();
+    });
+
+    conn.on('data', (d: unknown) => this.onFaceData?.(d));
+
+    conn.on('close', () => {
+      this.conn = undefined;
+      this.onDisconnected?.();
+    });
   }
 
   callPeer(remoteId: string, stream: MediaStream) {
     this.call = this.peer.call(remoteId, stream);
     this.call.on('stream', (s: MediaStream) => this.onRemoteStream?.(s));
+    this.call.on('close', () => this.onDisconnected?.());
   }
 
-  sendFaceData(data: any) {
+  answerCall(stream: MediaStream): void {
+    const call = this.pendingCall;
+    if (!call) return;
+
+    call.answer(stream);
+    call.on('stream', (s: MediaStream) => this.onRemoteStream?.(s));
+    call.on('close', () => this.onDisconnected?.());
+    this.call = call;
+    this.pendingCall = undefined;
+  }
+
+  sendFaceData(data: unknown) {
     if (this.conn?.open) {
       this.conn.send(data);
     }
   }
 
+  isDataConnected(): boolean {
+    return this.conn?.open ?? false;
+  }
+
   hangup() {
     try {
       this.call?.close();
-    } catch (e) {}
+    } catch {
+      /* ignore */
+    }
     try {
       this.conn?.close();
-    } catch (e) {}
+    } catch {
+      /* ignore */
+    }
     this.call = undefined;
     this.conn = undefined;
+    this.pendingCall = undefined;
   }
 }

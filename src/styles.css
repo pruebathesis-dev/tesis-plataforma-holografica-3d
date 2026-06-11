@@ -64,15 +64,9 @@ canvas {
   object-fit: cover;
 }
 
-#localVideo {
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  width: 220px;
-  height: 160px;
-  border-radius: 8px;
-  background: black;
-  z-index: 20;
+#localVideo,
+#remoteVideo {
+  display: none;
 }
 
 .hud {

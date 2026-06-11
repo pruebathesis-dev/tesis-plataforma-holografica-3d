@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FACEMESH_LANDMARK_COUNT, type LandmarkStream } from './FaceTracker';
 import { FaceMeshBuilder } from './FaceMeshBuilder';
+import { FaceTextureCompositor } from './FaceTextureCompositor';
 
 export interface AvatarRendererOptions {
   // How strongly audio energy opens the jaw (in normalized face units).
@@ -10,6 +11,12 @@ export interface AvatarRendererOptions {
   smoothingIterations: number;
   // Smoothing blend [0..1]. Typical range: 0.08–0.22.
   smoothingAlpha: number;
+  // Video fuente para textura UV en vivo (webcam).
+  videoElement?: HTMLVideoElement;
+  // MediaPipe selfieMode: invierte U del UV para alinear con píxeles del video.
+  selfieMode?: boolean;
+  // Anisotropía de la textura (calidad en ángulo).
+  textureAnisotropy?: number;
 }
 
 /**
@@ -18,7 +25,6 @@ export interface AvatarRendererOptions {
  * - Updates vertex positions in real time (landmark-driven deformation).
  * - Applies audio-driven mouth/jaw deformation for speech emphasis.
  * - Applies blink deformation driven by eyelid landmark ratios.
- * - Adds procedural eyeballs (no external models) for depth cues.
  * - Recomputes normals efficiently for smooth shading.
  *
  * WebRTC-ready design:
@@ -26,27 +32,19 @@ export interface AvatarRendererOptions {
  * - Local and remote users can be added without refactoring avatar deformation logic.
  */
 export class AvatarRenderer {
-  public readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+  public readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   private readonly builder: FaceMeshBuilder;
   private readonly jawOpenAmount: number;
   private readonly smoothingIterations: number;
   private readonly smoothingAlpha: number;
+  private uvSelfieMode: boolean;
+  private readonly faceCompositor: FaceTextureCompositor;
+  private faceTextureSource: HTMLVideoElement | null;
+  private lastLandmarks2D: { x: number; y: number }[] | null = null;
 
   // We cache the last valid landmark frame so rendering can continue briefly through dropouts.
   private readonly lastLandmarks = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
   private hasLast = false;
-
-  // Procedural eyeballs for depth/realism cues (no external assets).
-  // Left eye structure: sclera (white sphere) + iris container (rotatable) + iris + pupil
-  private readonly leftEyeSclera: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  private readonly leftIrisContainer: THREE.Object3D = new THREE.Object3D();
-  private readonly leftIris: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  private readonly leftPupil: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  // Right eye structure
-  private readonly rightEyeSclera: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  private readonly rightIrisContainer: THREE.Object3D = new THREE.Object3D();
-  private readonly rightIris: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
-  private readonly rightPupil: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
 
   // Blink state smoothing (avoids twitchy eyelids).
   private blinkL = 0;
@@ -57,81 +55,25 @@ export class AvatarRenderer {
     this.jawOpenAmount = Math.max(0, options.jawOpenAmount);
     this.smoothingIterations = clampInt(options.smoothingIterations, 0, 4);
     this.smoothingAlpha = clamp01(options.smoothingAlpha);
+    this.uvSelfieMode = options.selfieMode ?? true;
 
-    // Thesis requirement: MeshStandardMaterial (physically plausible response).
-    // We keep parameters conservative to emphasize soft skin shading under face-optimized lights.
+    this.faceTextureSource = options.videoElement ?? null;
+    this.faceCompositor = new FaceTextureCompositor(this.uvSelfieMode);
+    this.faceCompositor.setVideoSource(this.faceTextureSource);
+    if (options.textureAnisotropy) {
+      this.faceCompositor.setAnisotropy(options.textureAnisotropy);
+    }
+
     const material = new THREE.MeshStandardMaterial({
-      color: 0xd6a28f,
-      metalness: 0.02,
-      roughness: 0.52,
-      side: THREE.FrontSide
+      color: 0xffffff,
+      map: this.faceCompositor.texture,
+      metalness: 0.0,
+      roughness: 0.42,
+      side: THREE.DoubleSide
     });
 
     this.mesh = new THREE.Mesh(builder.geometry, material);
-    this.mesh.frustumCulled = false; // Face stays near camera; frustum culling can flicker due to bounding updates.
-
-    // Eyeballs (procedural): realistic 3D eye structure
-    // Sclera (white part)
-    const scleraMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      metalness: 0.0,
-      roughness: 0.15
-    });
-    
-    // Iris (colored part - blue-ish)
-    const irisMaterial = new THREE.MeshStandardMaterial({
-      color: 0x7b9fc4,
-      metalness: 0.0,
-      roughness: 0.4
-    });
-    
-    // Pupil (black, very small)
-    const pupilMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0a0a0a,
-      metalness: 0.0,
-      roughness: 0.6
-    });
-
-    // Geometry is re-used; scale is updated per frame from landmark-derived eye width.
-    const scleraGeom = new THREE.SphereGeometry(1, 20, 16);
-    const irisGeom = new THREE.SphereGeometry(1, 16, 12);
-    const pupilGeom = new THREE.SphereGeometry(1, 12, 10);
-
-    // LEFT EYE
-    this.leftEyeSclera = new THREE.Mesh(scleraGeom, scleraMaterial);
-    this.leftIris = new THREE.Mesh(irisGeom, irisMaterial);
-    this.leftPupil = new THREE.Mesh(pupilGeom, pupilMaterial);
-    
-    // Scale iris (0.5x) and pupil (0.25x) relative to sclera
-    this.leftIris.scale.setScalar(0.5);
-    this.leftPupil.scale.setScalar(0.25);
-    
-    // Position iris and pupil on surface facing camera
-    this.leftIris.position.z = 1.0;
-    this.leftPupil.position.z = 1.1;
-    
-    // Build structure: iris container holds iris + pupil
-    this.leftIrisContainer.add(this.leftIris);
-    this.leftIrisContainer.add(this.leftPupil);
-    this.leftEyeSclera.add(this.leftIrisContainer);
-
-    // RIGHT EYE (same structure, mirrored)
-    this.rightEyeSclera = new THREE.Mesh(scleraGeom, scleraMaterial);
-    this.rightIris = new THREE.Mesh(irisGeom, irisMaterial);
-    this.rightPupil = new THREE.Mesh(pupilGeom, pupilMaterial);
-    
-    this.rightIris.scale.setScalar(0.5);
-    this.rightPupil.scale.setScalar(0.25);
-    
-    this.rightIris.position.z = 1.0;
-    this.rightPupil.position.z = 1.1;
-    
-    this.rightIrisContainer.add(this.rightIris);
-    this.rightIrisContainer.add(this.rightPupil);
-    this.rightEyeSclera.add(this.rightIrisContainer);
-
-    this.mesh.add(this.leftEyeSclera);
-    this.mesh.add(this.rightEyeSclera);
+    this.mesh.frustumCulled = false;
   }
 
   /**
@@ -159,9 +101,9 @@ export class AvatarRenderer {
     // landmarksToUse: Float32Array (3D positions)
     // originalLandmarks2D: {x, y}[] (from MediaPipe, in [0,1])
     // We expect the caller to provide both; if not available, skip update
-    const originalLandmarks2D = (stream as any).originalLandmarks2D as { x: number; y: number }[] | undefined;
-    if (originalLandmarks2D && landmarksToUse) {
-      this.builder.setPositionsFromLandmarks(landmarksToUse, originalLandmarks2D);
+    const originalLandmarks2D = stream.getLatestLandmarks2D();
+    if (landmarksToUse) {
+      this.builder.setPositionsFromLandmarks(landmarksToUse);
     }
 
     // Optional Laplacian smoothing for more continuous, skin-like surface.
@@ -173,11 +115,28 @@ export class AvatarRenderer {
     this.applyAudioLipDeformation(energy);
     this.applyAudioJawDeformation(energy);
 
-    // Update eyeballs after deformations so they remain correctly occluded by eyelids.
-    this.updateEyeballs();
+    // UV al final: proyección 1:1 con el frame de video (máxima fidelidad).
+    if (originalLandmarks2D) {
+      this.lastLandmarks2D = [...originalLandmarks2D];
+      this.builder.setUvsFromLandmarks2D(this.lastLandmarks2D, {
+        selfieMode: this.uvSelfieMode
+      });
+    }
 
     // Update normals for smooth shading (cheap at this mesh size).
     this.builder.recomputeNormals();
+  }
+
+  /** Actualiza la textura de video cada frame (independiente del mesh). */
+  public updateFaceTexture(landmarks2D?: ReadonlyArray<{ x: number; y: number }> | null): void {
+    if (landmarks2D && landmarks2D.length >= 468) {
+      this.lastLandmarks2D = landmarks2D.map((lm) => ({ x: lm.x, y: lm.y }));
+    }
+    this.faceCompositor.update(this.lastLandmarks2D);
+    if (this.mesh.material.map) {
+      this.mesh.material.map.needsUpdate = true;
+      this.mesh.material.needsUpdate = true;
+    }
   }
 
   private updateBlinkState(targetL: number, targetR: number): void {
@@ -310,14 +269,20 @@ export class AvatarRenderer {
     this.builder.position.needsUpdate = true;
   }
 
-  private updateEyeballs(): void {
-    const pos = this.builder.position.array as Float32Array;
-    const landmarks = this.builder.position.array as Float32Array; // same array
+  /** Cambia la fuente de video para el UV map (remoto del otro peer). */
+  public setFaceTextureSource(video: HTMLVideoElement | null, selfieMode = true): void {
+    this.faceTextureSource = video;
+    this.uvSelfieMode = selfieMode;
+    this.faceCompositor.setVideoSource(video);
+    this.faceCompositor.setSelfieMode(selfieMode);
+  }
 
-    // Left eye: corners 33 (outer), 133 (inner)
-    updateEyeballWithGaze(pos, landmarks, 33, 133, this.leftEyeSclera, this.leftIrisContainer, this.blinkL);
-    // Right eye: corners 263 (outer), 362 (inner)
-    updateEyeballWithGaze(pos, landmarks, 263, 362, this.rightEyeSclera, this.rightIrisContainer, this.blinkR);
+  public updateFromVertices(vertices: Float32Array): void {
+    const pos = this.mesh.geometry.attributes.position;
+    for (let i = 0; i < vertices.length; i++) {
+      pos.array[i] = vertices[i] * 0.01;
+    }
+    pos.needsUpdate = true;
   }
 }
 
@@ -410,65 +375,4 @@ function deformEyeRing(pos: Float32Array, cx: number, cy: number, cz: number, bl
     // Mild X pull reduces corner tearing under extreme blinks.
     pos[bi] = cx + (x - cx) * (1 - 0.12 * blink);
   }
-}
-
-// ---------------------------
-// Procedural eyeballs
-// ---------------------------
-
-/**
- * Updates eyeball position, scale, gaze direction, and blink effect.
- * 
- * - Positions sclera at eye center
- * - Scales eyeball based on eye width (human proportions)
- * - Rotates iris container for gaze tracking (simplified: just look forward)
- * - Applies blink by scaling iris vertically
- */
-function updateEyeballWithGaze(
-  pos: Float32Array,
-  landmarks: Float32Array,
-  cornerA: number,
-  cornerB: number,
-  eyeSclera: THREE.Object3D,
-  irisContainer: THREE.Object3D,
-  blinkAmount: number
-): void {
-  const a = 3 * cornerA;
-  const b = 3 * cornerB;
-
-  const ax = pos[a]!;
-  const ay = pos[a + 1]!;
-  const az = pos[a + 2]!;
-  const bx = pos[b]!;
-  const by = pos[b + 1]!;
-  const bz = pos[b + 2]!;
-
-  const cx = 0.5 * (ax + bx);
-  const cy = 0.5 * (ay + by);
-  const cz = 0.5 * (az + bz);
-
-  const eyeWidth = dist3(ax, ay, az, bx, by, bz);
-  // Eyeball radius: 0.28x eye width for realistic proportions
-  const r = Math.max(0.01, 0.28 * eyeWidth);
-
-  // Place eyeball FORWARD (positive Z) so it's visible on the face surface
-  // cz is usually around -0.3 to 0.3 in normalized space
-  eyeSclera.position.set(cx, cy, cz + 0.6 * r);
-  eyeSclera.scale.setScalar(r);
-
-  // GAZE TRACKING: Iris rotation
-  // For now, a simplified approach: iris looks slightly forward/down
-  // In a full implementation, use nose/mouth landmarks or a separate gaze model
-  const gazeX = -0.15; // slight downward tilt
-  const gazeY = 0.0;   // centered horizontally
-  const gazeZ = 0.05;  // slight forward tilt
-  
-  irisContainer.rotation.x = gazeX;
-  irisContainer.rotation.y = gazeY;
-  irisContainer.rotation.z = gazeZ;
-
-  // BLINK EFFECT: Scale iris vertically to simulate eyelid closure
-  // 0 = open, 1 = fully closed
-  const blinkScale = Math.max(0.0, 1.0 - blinkAmount * 1.2);
-  irisContainer.scale.y = blinkScale;
 }

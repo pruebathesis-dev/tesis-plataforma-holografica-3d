@@ -42,7 +42,7 @@ export class Renderer {
     // In current Three.js releases, lights/materials follow a PBR workflow by default.
     this.three.outputColorSpace = THREE.SRGBColorSpace;
     this.three.toneMapping = THREE.ACESFilmicToneMapping;
-    this.three.toneMappingExposure = 1.1;
+    this.three.toneMappingExposure = 1.15;
 
     this.scene = new THREE.Scene();
 
@@ -62,7 +62,7 @@ export class Renderer {
     // - Rim: cool/neutral from behind (separates silhouette)
     // - Catchlight: small point near camera for eye highlights
     // - Ambient: very low to prevent crushed blacks
-    const ambient = new THREE.AmbientLight(0xffffff, 0.18);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.32);
     this.scene.add(ambient);
 
     const key = new THREE.DirectionalLight(0xfff1e0, 2.2);
@@ -90,11 +90,15 @@ export class Renderer {
     const aspect = w / h;
     this.camera.left = -aspect;
     this.camera.right = aspect;
-    this.camera.top = 1;
-    this.camera.bottom = -1;
+    this.camera.top = 0.72;
+    this.camera.bottom = -0.72;
     this.camera.updateProjectionMatrix();
 
     this.three.setSize(w, h, false);
+  }
+
+  public getMaxAnisotropy(): number {
+    return this.three.capabilities.getMaxAnisotropy();
   }
 
   public renderFrame(): void {

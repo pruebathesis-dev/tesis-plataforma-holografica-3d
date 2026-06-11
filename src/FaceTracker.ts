@@ -1,7 +1,7 @@
   // Últimos landmarks 2D originales (MediaPipe)
-  public latestLandmarks2D: { x: number; y: number }[] = [];
 // Types from MediaPipe FaceMesh (imported dynamically in init())
-import type { NormalizedLandmark, Results } from '@mediapipe/face_mesh';
+  // Types from MediaPipe FaceMesh (imported dynamically in init())
+  import type { NormalizedLandmark, Results } from '@mediapipe/face_mesh';
 
 export const FACEMESH_LANDMARK_COUNT = 468;
 
@@ -37,6 +37,10 @@ export interface LandmarkStream {
    * Implementations should return a stable, internally-owned buffer to avoid per-frame allocations.
    */
   getLatestLandmarks(): Float32Array | null;
+  /**
+   * Landmarks 2D originales de MediaPipe [0..1] para mapeo UV sobre textura de video.
+   */
+  getLatestLandmarks2D(): ReadonlyArray<{ x: number; y: number }> | null;
   isActive(): boolean;
 }
 
@@ -55,6 +59,8 @@ export class FaceTracker implements LandmarkStream {
   private readonly refineLandmarks: boolean;
   private readonly selfieMode: boolean;
 
+  // Últimos landmarks 2D originales (MediaPipe)
+  public latestLandmarks2D: { x: number; y: number }[] = [];
   // Latest normalized and smoothed landmarks, packed xyzxyz...
   private readonly landmarks = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
   private hasFace = false;
@@ -101,6 +107,10 @@ export class FaceTracker implements LandmarkStream {
 
   public getLatestLandmarks(): Float32Array | null {
     return this.hasFace ? this.landmarks : null;
+  }
+
+  public getLatestLandmarks2D(): ReadonlyArray<{ x: number; y: number }> | null {
+    return this.hasFace && this.latestLandmarks2D.length > 0 ? this.latestLandmarks2D : null;
   }
 
   public isActive(): boolean {
@@ -236,7 +246,6 @@ export class FaceTracker implements LandmarkStream {
     const eyeDist = Math.sqrt(dxEye * dxEye + dyEye * dyEye);
     // Normalize so the eye-to-eye distance is approximately 1.0 unit.
     // This provides a natural "unit scale" for the avatar regardless of webcam resolution.
-    // Scale down by 0.45 to make the avatar more compact and less stretched.
     const rawScale = eyeDist > 1e-5 ? (0.45 / eyeDist) : 0.45;
 
     const lmCenter = face[168] as NormalizedLandmark;

@@ -153,8 +153,11 @@ export class FaceMeshBuilder {
   private readonly neighborSum: Float32Array;
   private readonly neighborCount: Uint16Array;
   private readonly smoothScratch: Float32Array;
+  private uvInitialized = false;
+  private readonly uvSmoothing: number;
 
-  public constructor() {
+  public constructor(uvSmoothing = 0.22) {
+    this.uvSmoothing = clamp01(uvSmoothing);
     this.positions = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
     this.normals = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
 
@@ -179,7 +182,7 @@ export class FaceMeshBuilder {
     const uvArray = new Float32Array(FACEMESH_LANDMARK_COUNT * 2);
     for (let i = 0; i < FACEMESH_LANDMARK_COUNT; i++) {
       // Default: x/y in [-1,1] → map to [0,1]
-      // These will be updated in setPositionsFromLandmarks if needed
+      // Updated in setUvsFromLandmarks2D each frame
       uvArray[2 * i] = 0.5; // placeholder, will update
       uvArray[2 * i + 1] = 0.5;
     }
@@ -205,15 +208,9 @@ export class FaceMeshBuilder {
    * @param positions3D Float32Array of 3D positions (length = FACEMESH_LANDMARK_COUNT * 3)
    * @param originalLandmarks2D Array of {x, y} in [0,1] from MediaPipe
    */
-  public setPositionsFromLandmarks(
-    positions3D: Float32Array,
-    originalLandmarks2D: { x: number; y: number }[]
-  ): void {
+  public setPositionsFromLandmarks(positions3D: Float32Array): void {
     if (positions3D.length !== this.positions.length) {
       throw new Error(`Expected positions3D length ${this.positions.length}, got ${positions3D.length}.`);
-    }
-    if (!originalLandmarks2D || originalLandmarks2D.length !== NUM_LANDMARKS) {
-      throw new Error(`Expected originalLandmarks2D length ${NUM_LANDMARKS}, got ${originalLandmarks2D?.length}.`);
     }
     for (let i = 0; i < NUM_LANDMARKS; i++) {
       const px = positions3D[3 * i];
@@ -222,14 +219,42 @@ export class FaceMeshBuilder {
       this.positions[3 * i] = px !== undefined ? px : 0;
       this.positions[3 * i + 1] = py !== undefined ? py : 0;
       this.positions[3 * i + 2] = pz !== undefined ? pz : 0;
-
-      const lm = originalLandmarks2D[i];
-      const u = lm && lm.x !== undefined ? lm.x : 0.5;
-      const v = lm && lm.y !== undefined ? 1 - lm.y : 0.5;
-      this.uv.array[2 * i] = u;
-      this.uv.array[2 * i + 1] = v;
     }
     this.position.needsUpdate = true;
+  }
+
+  /**
+   * UV 1:1 desde landmarks 2D de MediaPipe → píxeles del frame de video.
+   * Se aplica al final del frame (después de deformaciones 3D) para máxima fidelidad.
+   */
+  public setUvsFromLandmarks2D(
+    originalLandmarks2D: { x: number; y: number }[],
+    options: { selfieMode?: boolean } = {}
+  ): void {
+    const selfieMode = options.selfieMode ?? false;
+    if (!originalLandmarks2D || originalLandmarks2D.length !== NUM_LANDMARKS) {
+      throw new Error(`Expected originalLandmarks2D length ${NUM_LANDMARKS}, got ${originalLandmarks2D?.length}.`);
+    }
+
+    const a = this.uvSmoothing;
+    for (let i = 0; i < NUM_LANDMARKS; i++) {
+      const lm = originalLandmarks2D[i];
+      const rawX = lm && lm.x !== undefined ? lm.x : 0.5;
+      const rawY = lm && lm.y !== undefined ? lm.y : 0.5;
+      const targetU = selfieMode ? 1 - rawX : rawX;
+      const targetV = 1 - rawY;
+
+      const bi = 2 * i;
+      if (!this.uvInitialized) {
+        this.uv.array[bi] = targetU;
+        this.uv.array[bi + 1] = targetV;
+      } else {
+        this.uv.array[bi] = a * this.uv.array[bi]! + (1 - a) * targetU;
+        this.uv.array[bi + 1] = a * this.uv.array[bi + 1]! + (1 - a) * targetV;
+      }
+    }
+
+    this.uvInitialized = true;
     this.uv.needsUpdate = true;
   }
 

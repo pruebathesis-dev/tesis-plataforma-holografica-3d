@@ -68,7 +68,7 @@ export class AvatarRenderer {
       color: 0xffffff,
       map: this.faceCompositor.texture,
       metalness: 0.0,
-      roughness: 0.42,
+      roughness: 0.5,
       side: THREE.DoubleSide
     });
 
@@ -133,9 +133,15 @@ export class AvatarRenderer {
       this.lastLandmarks2D = landmarks2D.map((lm) => ({ x: lm.x, y: lm.y }));
     }
     this.faceCompositor.update(this.lastLandmarks2D);
-    if (this.mesh.material.map) {
-      this.mesh.material.map.needsUpdate = true;
-      this.mesh.material.needsUpdate = true;
+    // If the compositor recreated its CanvasTexture (on resize), make sure
+    // the mesh material uses the new texture object.
+    const mat = this.mesh.material as THREE.MeshStandardMaterial;
+    if (mat.map !== this.faceCompositor.texture) {
+      mat.map = this.faceCompositor.texture;
+    }
+    if (mat.map) {
+      mat.map.needsUpdate = true;
+      mat.needsUpdate = true;
     }
   }
 

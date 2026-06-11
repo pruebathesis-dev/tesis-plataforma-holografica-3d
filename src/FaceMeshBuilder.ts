@@ -156,7 +156,7 @@ export class FaceMeshBuilder {
   private uvInitialized = false;
   private readonly uvSmoothing: number;
 
-  public constructor(uvSmoothing = 0.22) {
+  public constructor(uvSmoothing = 0.0) {
     this.uvSmoothing = clamp01(uvSmoothing);
     this.positions = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
     this.normals = new Float32Array(FACEMESH_LANDMARK_COUNT * 3);
@@ -224,8 +224,7 @@ export class FaceMeshBuilder {
   }
 
   /**
-   * UV 1:1 desde landmarks 2D de MediaPipe → píxeles del frame de video.
-   * Se aplica al final del frame (después de deformaciones 3D) para máxima fidelidad.
+   * UV mapping: direct 1:1 projection from landmarks to video texture.
    */
   public setUvsFromLandmarks2D(
     originalLandmarks2D: { x: number; y: number }[],
@@ -241,11 +240,11 @@ export class FaceMeshBuilder {
       const lm = originalLandmarks2D[i];
       const rawX = lm && lm.x !== undefined ? lm.x : 0.5;
       const rawY = lm && lm.y !== undefined ? lm.y : 0.5;
-      const targetU = selfieMode ? 1 - rawX : rawX;
-      const targetV = 1 - rawY;
+      const targetU = clamp01(selfieMode ? 1 - rawX : rawX);
+      const targetV = clamp01(1 - rawY);
 
       const bi = 2 * i;
-      if (!this.uvInitialized) {
+      if (!this.uvInitialized || a <= 0) {
         this.uv.array[bi] = targetU;
         this.uv.array[bi + 1] = targetV;
       } else {

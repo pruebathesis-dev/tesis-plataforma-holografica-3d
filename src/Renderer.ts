@@ -42,7 +42,7 @@ export class Renderer {
     // In current Three.js releases, lights/materials follow a PBR workflow by default.
     this.three.outputColorSpace = THREE.SRGBColorSpace;
     this.three.toneMapping = THREE.ACESFilmicToneMapping;
-    this.three.toneMappingExposure = 1.15;
+    this.three.toneMappingExposure = 1.0;
 
     this.scene = new THREE.Scene();
 

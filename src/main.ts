@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FaceMask } from './FaceMask';
 import './styles.css';
 import { PeerClient } from './PeerClient';
 import { Renderer } from './Renderer';
@@ -10,34 +9,11 @@ import { VideoInput } from './VideoInput';
 
 console.log('🚀 main.ts loaded');
 
-// Optional: upload a photo to preview a static face mask on a separate scene
-const upload = document.getElementById('upload') as HTMLInputElement | null;
-if (upload) {
-  const previewScene = new THREE.Scene();
-  const previewCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  previewCamera.position.z = 3;
-  const previewRenderer = new THREE.WebGLRenderer({ antialias: true });
-  previewRenderer.setSize(200, 200);
-  previewRenderer.domElement.style.cssText = 'position:absolute;bottom:8px;right:8px;z-index:5;';
-  document.body.appendChild(previewRenderer.domElement);
-  previewScene.add(new THREE.DirectionalLight(0xffffff, 1));
-  previewScene.add(new THREE.AmbientLight(0xffffff, 0.6));
-
-  upload.addEventListener('change', async () => {
-    const file = upload.files?.[0];
-    if (!file) return;
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    await img.decode();
-    const mask = new FaceMask();
-    const mesh = await mask.buildFromImage(img);
-    previewScene.add(mesh);
-    (function animatePreview() {
-      requestAnimationFrame(animatePreview);
-      previewRenderer.render(previewScene, previewCamera);
-    })();
-  });
-}
+// Photo upload disabled - video continues streaming live
+// const upload = document.getElementById('upload') as HTMLInputElement | null;
+// if (upload) {
+//   // preview scene setup for static face photos
+// }
 
 function getOrCreateRoomId(): string {
   const params = new URLSearchParams(window.location.search);
@@ -112,13 +88,13 @@ peerClient.onOpen = (id) => {
 };
 
 const renderer = new Renderer(threeCanvas);
-const meshBuilder = new FaceMeshBuilder(0.18);
+const meshBuilder = new FaceMeshBuilder(0.08);
 const videoInput = new VideoInput();
 
 const avatar = new AvatarRenderer(meshBuilder, {
   jawOpenAmount: 0.18,
-  smoothingIterations: 0,
-  smoothingAlpha: 0.1,
+  smoothingIterations: 1,
+  smoothingAlpha: 0.15,
   videoElement: videoInput.video,
   selfieMode: true,
   textureAnisotropy: renderer.getMaxAnisotropy()
@@ -128,7 +104,7 @@ avatar.mesh.visible = false;
 renderer.scene.add(avatar.mesh);
 const faceTracker = new FaceTracker({
   id: 'local',
-  landmarkSmoothing: 0.75,
+  landmarkSmoothing: 0.88,
   refineLandmarks: false,
   selfieMode: true
 });
@@ -189,13 +165,11 @@ async function renderLoop() {
   const showRemote = isInCall && remoteStream.isActive() && hasRemoteVideo;
   avatar.mesh.visible = showRemote;
 
-  if (isInCall && hasRemoteVideo) {
-    avatar.setFaceTextureSource(remoteTextureVideo, true);
-    avatar.updateFaceTexture(remoteStream.getLatestLandmarks2D());
-  }
-
   if (showRemote) {
+    // Sincronizar malla y textura en el mismo frame
+    avatar.setFaceTextureSource(remoteTextureVideo, true);
     avatar.updateFromStream(remoteStream, 0);
+    avatar.updateFaceTexture(remoteStream.getLatestLandmarks2D());
   }
 
   renderer.renderFrame();

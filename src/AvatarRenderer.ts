@@ -65,10 +65,10 @@ export class AvatarRenderer {
     }
 
     const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: 0x2a2a2a,
       map: this.faceCompositor.texture,
-      metalness: 0.0,
-      roughness: 0.5,
+      metalness: 0.03,
+      roughness: 0.58,
       side: THREE.DoubleSide
     });
 
@@ -143,6 +143,8 @@ export class AvatarRenderer {
       mat.map.needsUpdate = true;
       mat.needsUpdate = true;
     }
+    // Evita flash blanco cuando no hay frame de video activo
+    mat.color.setHex(this.faceCompositor.hasActiveFrame ? 0xffffff : 0x2a2a2a);
   }
 
   private updateBlinkState(targetL: number, targetR: number): void {

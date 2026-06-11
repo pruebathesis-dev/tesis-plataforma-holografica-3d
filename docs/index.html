@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Face Avatar P2P</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>" />
-  <script type="module" crossorigin src="/tesis-plataforma-holografica-3d/assets/index-BY7BWKAX.js"></script>
+  <script type="module" crossorigin src="/tesis-plataforma-holografica-3d/assets/index-D20XYimU.js"></script>
   <link rel="modulepreload" crossorigin href="/tesis-plataforma-holografica-3d/assets/peerjs-CLJJfVpB.js">
-  <link rel="modulepreload" crossorigin href="/tesis-plataforma-holografica-3d/assets/vendor-BO1a0qO7.js">
-  <link rel="stylesheet" crossorigin href="/tesis-plataforma-holografica-3d/assets/index-BIReMTt1.css">
+  <link rel="modulepreload" crossorigin href="/tesis-plataforma-holografica-3d/assets/vendor-D-6egNo8.js">
+  <link rel="stylesheet" crossorigin href="/tesis-plataforma-holografica-3d/assets/index-Dq2kM0Iv.css">
 </head>
 <body>
   <input type="file" id="upload" accept="image/*" style="position:absolute;z-index:10;" />
@@ -31,12 +31,14 @@
 
     <p id="noteV" style="padding:8px 12px; margin:0"></p>
 
-    <div class="stage" style="position:relative; width:100%; height:70vh;">
-      <!-- WebGL canvas (Three.js) -->
+    <div class="stage">
+      <div id="stageIdle" class="stage-idle" aria-hidden="false">
+        <div class="stage-idle-icon">👤</div>
+        <p class="stage-idle-title">Avatar holográfico P2P</p>
+        <p class="stage-idle-hint">Pulsa <strong>Iniciar cámara</strong> y conecta con otro peer para ver su rostro en 3D.</p>
+      </div>
       <canvas id="threeCanvas"></canvas>
-      <!-- 2D overlay for debugging (landmarks, guides) -->
       <canvas id="overlay2d"></canvas>
-
       <video id="localVideo" autoplay muted playsinline></video>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>

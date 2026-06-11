@@ -35,7 +35,7 @@ export class Renderer {
       powerPreference: 'high-performance'
     });
     this.three.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.three.setClearColor(0x000000, 0); // transparent over CSS background
+    this.three.setClearColor(0x0b1020, 1); // fondo oscuro (evita flash blanco en GitHub Pages)
     this.three.shadowMap.enabled = false; // faces look good without shadows; saves GPU time
 
     // Physically-based lighting configuration (thesis requirement).

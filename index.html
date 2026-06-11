@@ -27,12 +27,14 @@
 
     <p id="noteV" style="padding:8px 12px; margin:0"></p>
 
-    <div class="stage" style="position:relative; width:100%; height:70vh;">
-      <!-- WebGL canvas (Three.js) -->
+    <div class="stage">
+      <div id="stageIdle" class="stage-idle" aria-hidden="false">
+        <div class="stage-idle-icon">👤</div>
+        <p class="stage-idle-title">Avatar holográfico P2P</p>
+        <p class="stage-idle-hint">Pulsa <strong>Iniciar cámara</strong> y conecta con otro peer para ver su rostro en 3D.</p>
+      </div>
       <canvas id="threeCanvas"></canvas>
-      <!-- 2D overlay for debugging (landmarks, guides) -->
       <canvas id="overlay2d"></canvas>
-
       <video id="localVideo" autoplay muted playsinline></video>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>

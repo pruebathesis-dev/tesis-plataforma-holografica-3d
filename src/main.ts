@@ -68,6 +68,7 @@ const hangupBtn = document.getElementById('hangupBtn') as HTMLButtonElement;
 const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement;
 const overlay2d = document.getElementById('overlay2d') as HTMLCanvasElement;
 const noteV = document.querySelector('#noteV') as HTMLElement;
+const stageIdle = document.getElementById('stageIdle') as HTMLElement | null;
 const roomId = document.getElementById('roomId') as HTMLElement;
 const peerIdEl = document.getElementById('peerId') as HTMLElement;
 // Video off-screen a resolución completa (1px rompe drawImage / UV map).
@@ -88,7 +89,7 @@ peerClient.onOpen = (id) => {
 };
 
 const renderer = new Renderer(threeCanvas);
-const meshBuilder = new FaceMeshBuilder(0.08);
+const meshBuilder = new FaceMeshBuilder(0.14);
 const videoInput = new VideoInput();
 
 const avatar = new AvatarRenderer(meshBuilder, {
@@ -164,6 +165,7 @@ async function renderLoop() {
   const hasRemoteVideo = remoteTextureVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
   const showRemote = isInCall && remoteStream.isActive() && hasRemoteVideo;
   avatar.mesh.visible = showRemote;
+  if (stageIdle) stageIdle.classList.toggle('hidden', showRemote);
 
   if (showRemote) {
     // Sincronizar malla y textura en el mismo frame

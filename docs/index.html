@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Face Avatar P2P</title>
-  <script type="module" crossorigin src="/facial-avatar-thesis-/assets/index-oXksl-iV.js"></script>
-  <link rel="modulepreload" crossorigin href="/facial-avatar-thesis-/assets/peerjs-jZv2-6J0.js">
-  <link rel="modulepreload" crossorigin href="/facial-avatar-thesis-/assets/vendor-BaBaYguq.js">
-  <link rel="stylesheet" crossorigin href="/facial-avatar-thesis-/assets/index-k2pq1q75.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>" />
+  <script type="module" crossorigin src="/facial-avatar-thesis-/assets/index-BY7BWKAX.js"></script>
+  <link rel="modulepreload" crossorigin href="/facial-avatar-thesis-/assets/peerjs-CLJJfVpB.js">
+  <link rel="modulepreload" crossorigin href="/facial-avatar-thesis-/assets/vendor-BO1a0qO7.js">
+  <link rel="stylesheet" crossorigin href="/facial-avatar-thesis-/assets/index-BIReMTt1.css">
 </head>
 <body>
+  <input type="file" id="upload" accept="image/*" style="position:absolute;z-index:10;" />
 
   <div id="app">
     <div class="top-bar">
@@ -29,13 +31,18 @@
 
     <p id="noteV" style="padding:8px 12px; margin:0"></p>
 
-    <div class="stage">
-      <canvas id="overlay"></canvas>
+    <div class="stage" style="position:relative; width:100%; height:70vh;">
+      <!-- WebGL canvas (Three.js) -->
+      <canvas id="threeCanvas"></canvas>
+      <!-- 2D overlay for debugging (landmarks, guides) -->
+      <canvas id="overlay2d"></canvas>
+
       <video id="localVideo" autoplay muted playsinline></video>
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh_connections.js"></script>
 </body>
 </html>
 

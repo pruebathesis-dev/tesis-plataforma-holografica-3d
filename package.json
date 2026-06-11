@@ -5,8 +5,8 @@
   "version": "1.0.0",
   "description": "Real-time procedural facial avatar (Three.js + MediaPipe FaceMesh + Web Audio) for academic evaluation.",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/use-dev-index.mjs && vite",
+    "build": "vite build && node scripts/publish-root.mjs",
     "preview": "vite preview",
     "server": "node server.js"
   },

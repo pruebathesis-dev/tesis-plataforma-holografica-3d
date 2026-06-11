@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  base: '/facial-avatar-thesis-/',
+  base: '/tesis-plataforma-holografica-3d/',
 
   build: {
     outDir: 'docs',

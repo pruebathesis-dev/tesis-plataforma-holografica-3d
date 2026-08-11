@@ -83,7 +83,46 @@ document.body.appendChild(remoteTextureVideo);
 
 const currentRoomId = getOrCreateRoomId();
 roomId.textContent = currentRoomId;
+const originalTitle = document.title || 'Avatar holográfico P2P';
 if (acceptBtn) acceptBtn.disabled = true;
+
+function showIncomingCallNotification() {
+  try {
+    if (typeof Notification !== 'undefined') {
+      if (Notification.permission === 'granted') {
+        const n = new Notification('Llamada entrante', {
+          body: 'Pulsa Aceptar para contestar',
+          tag: 'incoming-call'
+        });
+        n.onclick = () => {
+          try {
+            window.focus();
+            acceptBtn?.click();
+            n.close();
+          } catch {}
+        };
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((p) => {
+          if (p === 'granted') showIncomingCallNotification();
+        });
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  if (acceptBtn) {
+    acceptBtn.classList.add('pulse');
+    acceptBtn.disabled = false;
+    try { acceptBtn.focus(); } catch {}
+    setTimeout(() => {
+      acceptBtn.classList.remove('pulse');
+      if (acceptBtn) acceptBtn.disabled = true;
+      document.title = originalTitle;
+    }, 10000);
+  }
+  document.title = '📞 Llamada entrante — pulsa Aceptar';
+}
 
 peerClient.onOpen = (id) => {
   noteV.textContent = `🔗 Share your Peer ID to connect: ${id}`;
@@ -231,7 +270,6 @@ callBtn.onclick = () => {
     peerClient.callPeer(remoteId, localStream);
 
     hangupBtn.disabled = false;
-    acceptBtn.disabled = true;
     callBtn.disabled = true;
     noteV.textContent = '📞 Llamando... (no verás tu cara, solo la del otro)';
   } catch (err) {
@@ -243,32 +281,27 @@ callBtn.onclick = () => {
 hangupBtn.onclick = () => endCall();
 
 acceptBtn.onclick = () => {
-  if (!localStream) {
-    noteV.textContent = '⚠️ No hay cámara activa para aceptar la llamada';
-    return;
-  }
   if (acceptBtn.disabled) return;
 
-  peerClient.answerCall(localStream);
+  // Answer even if localStream is not available (receive-only mode)
+  peerClient.answerCall(localStream ?? undefined);
   isInCall = true;
   acceptBtn.disabled = true;
+  acceptBtn.classList.remove('pulse');
   hangupBtn.disabled = false;
   callBtn.disabled = true;
   noteV.textContent = '📞 Llamada aceptada — conectando...';
+  document.title = originalTitle;
 };
 
 peerClient.onIncomingCall = (call) => {
-  if (!localStream) {
-    noteV.textContent = '⚠️ Llamada entrante — inicia la cámara primero';
-    return;
-  }
-
   // Enable explicit accept flow so the user can choose to answer.
   isInCall = false;
-  acceptBtn.disabled = false;
+  if (acceptBtn) acceptBtn.disabled = false;
   callBtn.disabled = true;
   hangupBtn.disabled = true;
   noteV.textContent = '📞 Llamada entrante — pulsa Aceptar';
+  showIncomingCallNotification();
 };
 
 peerClient.onDataConnected = () => {

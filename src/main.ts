@@ -64,6 +64,7 @@ const peerClient = new PeerClient();
 
 const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
 const callBtn = document.getElementById('callBtn') as HTMLButtonElement;
+const acceptBtn = document.getElementById('acceptBtn') as HTMLButtonElement;
 const hangupBtn = document.getElementById('hangupBtn') as HTMLButtonElement;
 const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement;
 const overlay2d = document.getElementById('overlay2d') as HTMLCanvasElement;
@@ -82,6 +83,7 @@ document.body.appendChild(remoteTextureVideo);
 
 const currentRoomId = getOrCreateRoomId();
 roomId.textContent = currentRoomId;
+if (acceptBtn) acceptBtn.disabled = true;
 
 peerClient.onOpen = (id) => {
   noteV.textContent = `🔗 Share your Peer ID to connect: ${id}`;
@@ -229,6 +231,7 @@ callBtn.onclick = () => {
     peerClient.callPeer(remoteId, localStream);
 
     hangupBtn.disabled = false;
+    acceptBtn.disabled = true;
     callBtn.disabled = true;
     noteV.textContent = '📞 Llamando... (no verás tu cara, solo la del otro)';
   } catch (err) {
@@ -239,16 +242,33 @@ callBtn.onclick = () => {
 
 hangupBtn.onclick = () => endCall();
 
-peerClient.onIncomingCall = () => {
+acceptBtn.onclick = () => {
+  if (!localStream) {
+    noteV.textContent = '⚠️ No hay cámara activa para aceptar la llamada';
+    return;
+  }
+  if (acceptBtn.disabled) return;
+
+  peerClient.answerCall(localStream);
+  isInCall = true;
+  acceptBtn.disabled = true;
+  hangupBtn.disabled = false;
+  callBtn.disabled = true;
+  noteV.textContent = '📞 Llamada aceptada — conectando...';
+};
+
+peerClient.onIncomingCall = (call) => {
   if (!localStream) {
     noteV.textContent = '⚠️ Llamada entrante — inicia la cámara primero';
     return;
   }
-  isInCall = true;
-  peerClient.answerCall(localStream);
-  hangupBtn.disabled = false;
+
+  // Enable explicit accept flow so the user can choose to answer.
+  isInCall = false;
+  acceptBtn.disabled = false;
   callBtn.disabled = true;
-  noteV.textContent = '📞 Llamada entrante — conectando...';
+  hangupBtn.disabled = true;
+  noteV.textContent = '📞 Llamada entrante — pulsa Aceptar';
 };
 
 peerClient.onDataConnected = () => {

@@ -39,6 +39,7 @@ export class FaceTextureCompositor {
 
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.texture.format = THREE.RGBAFormat;
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
     this.texture.generateMipmaps = false;
@@ -140,6 +141,7 @@ export class FaceTextureCompositor {
       }
       this.texture = new THREE.CanvasTexture(this.canvas);
       this.texture.colorSpace = THREE.SRGBColorSpace;
+      this.texture.format = THREE.RGBAFormat;
       this.texture.minFilter = THREE.LinearFilter;
       this.texture.magFilter = THREE.LinearFilter;
       this.texture.generateMipmaps = false;
@@ -166,13 +168,22 @@ export class FaceTextureCompositor {
 
     const lm = this.lastLandmarks2D;
 
-    this.ctx.imageSmoothingEnabled = true;
-    this.ctx.imageSmoothingQuality = 'high';
-    this.ctx.filter = 'contrast(1.06) saturate(1.1) brightness(1.02)';
-    this.ctx.drawImage(video, 0, 0, w, h);
-    this.ctx.filter = 'none';
+    // Draw an opaque background first so areas outside the face hull remain solid.
+    paintDarkPlaceholder(this.ctx, w, h);
 
-    if (lm) {
+    if (lm && lm.length >= 468) {
+      this.ctx.save();
+      this.ctx.beginPath();
+      drawFaceHull(this.ctx, lm, w, h, this.selfieMode);
+      this.ctx.closePath();
+      this.ctx.clip();
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = 'high';
+      this.ctx.filter = 'contrast(1.06) saturate(1.1) brightness(1.02)';
+      this.ctx.drawImage(video, 0, 0, w, h);
+      this.ctx.restore();
+      this.ctx.filter = 'none';
+
       drawRealisticEye(
         this.ctx,
         lm,
@@ -313,4 +324,34 @@ function drawRealisticEye(
   ctx.fill();
 
   ctx.restore();
+}
+
+function drawFaceHull(ctx: CanvasRenderingContext2D, lm: ReadonlyArray<Landmark2D>, w: number, h: number, selfieMode: boolean): void {
+  const points = lm.map((p) => ({ x: (selfieMode ? 1 - p.x : p.x) * w, y: (1 - p.y) * h }));
+  const hull = computeConvexHull(points);
+  if (hull.length < 3) return;
+  ctx.moveTo(hull[0].x, hull[0].y);
+  for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
+  ctx.closePath();
+}
+
+function computeConvexHull(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length <= 3) return points.slice();
+  const sorted = points.slice().sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+  const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: { x: number; y: number }[] = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: { x: number; y: number }[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
 }

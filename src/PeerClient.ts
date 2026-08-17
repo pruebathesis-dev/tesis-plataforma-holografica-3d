@@ -42,6 +42,11 @@ export class PeerClient {
     this.wireDataConnection(conn);
   }
 
+  connectToCallPeer(call: MediaConnection): void {
+    if (!call.peer) return;
+    this.connect(call.peer);
+  }
+
   private wireDataConnection(conn: DataConnection): void {
     this.conn = conn;
 
@@ -64,23 +69,11 @@ export class PeerClient {
     this.call.on('close', () => this.onDisconnected?.());
   }
 
-  answerCall(stream?: MediaStream | null): void {
+  answerCall(stream: MediaStream): void {
     const call = this.pendingCall;
     if (!call) return;
 
-    try {
-      // Answer with stream if provided; otherwise answer silently to receive remote stream only.
-      if (stream) call.answer(stream);
-      else call.answer();
-    } catch (err) {
-      console.warn('Error answering call:', err);
-      try {
-        call.answer();
-      } catch {
-        // swallow
-      }
-    }
-
+    call.answer(stream);
     call.on('stream', (s: MediaStream) => this.onRemoteStream?.(s));
     call.on('close', () => this.onDisconnected?.());
     this.call = call;

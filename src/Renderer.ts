@@ -35,8 +35,8 @@ export class Renderer {
       powerPreference: 'high-performance'
     });
     this.three.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.three.setClearColor(0x0b1020, 1); // fondo oscuro (evita flash blanco en GitHub Pages)
-    this.three.shadowMap.enabled = false; // faces look good without shadows; saves GPU time
+    this.three.setClearColor(0x000000, 1);
+    this.three.shadowMap.enabled = false;
 
     // Physically-based lighting configuration (thesis requirement).
     // In current Three.js releases, lights/materials follow a PBR workflow by default.

@@ -65,10 +65,11 @@ export class AvatarRenderer {
     }
 
     const material = new THREE.MeshStandardMaterial({
-      color: 0x2a2a2a,
+      color: 0x000000,
+      emissive: 0x000000,
       map: this.faceCompositor.texture,
       metalness: 0.03,
-      roughness: 0.58,
+      roughness: 1.0,
       side: THREE.DoubleSide
     });
 
